@@ -3,6 +3,8 @@ package com.example.app_v03;
 import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.ImageFormat;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
@@ -16,13 +18,17 @@ import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.provider.MediaStore;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.util.Log;
 import android.util.Size;
 import android.util.SparseIntArray;
@@ -30,7 +36,10 @@ import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.Toast;
+
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -43,11 +52,16 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
+import com.googlecode.tesseract.android.TessBaseAPI;
+
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "AndroidCameraApi";
     private Button takePictureButton;
     private Button savepicture;
     private TextureView textureView;
+    EditText editText2;
+   // private TessBaseAPI tessBaseApi;
+    TesseractWork tesswork;
 
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
 
@@ -75,6 +89,11 @@ public class MainActivity extends AppCompatActivity {
     Image image;
     ImageReader reader;
     CaptureRequest.Builder captureBuilder;
+    Double tess_num;
+    Double converted_num;
+    String result1="111";
+
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -85,13 +104,17 @@ public class MainActivity extends AppCompatActivity {
         textureView.setSurfaceTextureListener(textureListener);
         takePictureButton = (Button) findViewById(R.id.btn_takepicture);
         savepicture = (Button) findViewById(R.id.savepicture);
+        editText2 = (EditText)findViewById(R.id.editText2);
 
         takePictureButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 takePicture();
+            //   editText2.append(tesswork.result);
             }
         });
+
+
 
         savepicture.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -171,7 +194,16 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    public Uri getImageUri(Context inContext, Bitmap inImage) {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        inImage.compress(Bitmap.CompressFormat.JPEG, 100, bytes);
+        String path = MediaStore.Images.Media.insertImage(inContext.getContentResolver(), inImage, "Title", null);
+        return Uri.parse(path);
+    }
+
     protected void takePicture() {
+
+        tesswork = new TesseractWork();
 
         if (null == cameraDevice) {
             Log.e(TAG, "cameraDevice is null");
@@ -184,7 +216,7 @@ public class MainActivity extends AppCompatActivity {
             if (characteristics != null) {
                 jpegSizes = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP).getOutputSizes(ImageFormat.JPEG);
             }
-            int width = 640;
+            int width =640;
             int height = 480;
             if (jpegSizes != null && 0 < jpegSizes.length) {
                 width = jpegSizes[0].getWidth();
@@ -205,11 +237,6 @@ public class MainActivity extends AppCompatActivity {
             int rotation = getWindowManager().getDefaultDisplay().getRotation();
             captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));
 
-        /*    Random generator = new Random();
-            int n = 10000;
-            n = generator.nextInt(n);
-            final File file = new File(Environment.getExternalStorageDirectory().toString() + "/pic" + n + ".jpg"); */
-
             ImageReader.OnImageAvailableListener readerListener = new ImageReader.OnImageAvailableListener() {
                 @Override
                 public void onImageAvailable(ImageReader reader) {
@@ -217,34 +244,28 @@ public class MainActivity extends AppCompatActivity {
                     //     try {
                     image = reader.acquireLatestImage();
 
-                    //если вызываю - все падает
                     buffer.allocate(0);
 
                     buffer = image.getPlanes()[0].getBuffer();
                     bytes = new byte[buffer.capacity()];
                     buffer.get(bytes);
-                    //   save(bytes,file);
-                    //   }
-                    // catch (FileNotFoundException e) {
-                    //      e.printStackTrace();
-                    //    } catch (IOException e) {
-                    //       e.printStackTrace();
-                    //   } finally {
-                    //      if (image != null) {
-                    //  image.close();
-                    //      }
-                    //  }
+
+                    tesswork.startOCR(bytes);
+                    result1 = tesswork.result;
+                    Toast.makeText(MainActivity.this, result1, Toast.LENGTH_SHORT).show();
+
+                //  editText2.append(result1);
                 }
 
 
             };
+
 
             reader.setOnImageAvailableListener(readerListener, mBackgroundHandler);
             final CameraCaptureSession.CaptureCallback captureListener = new CameraCaptureSession.CaptureCallback() {
                 @Override
                 public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, TotalCaptureResult result) {
                     super.onCaptureCompleted(session, request, result);
-                    //       Toast.makeText(MainActivity.this, "Saved:" + file, Toast.LENGTH_SHORT).show();
                     createCameraPreview();
                 }
             };
@@ -254,6 +275,9 @@ public class MainActivity extends AppCompatActivity {
                 public void onConfigured(CameraCaptureSession session) {
                     try {
                         session.capture(captureBuilder.build(), captureListener, mBackgroundHandler);
+
+
+
                     } catch (CameraAccessException e) {
                         e.printStackTrace();
                     }
@@ -267,6 +291,9 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
         }
     }
+
+
+
 
     public void save(byte[] bytes, File _file) throws IOException {
         OutputStream output = null;
@@ -292,18 +319,16 @@ public class MainActivity extends AppCompatActivity {
         int rotation = getWindowManager().getDefaultDisplay().getRotation();
         captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));
 
-        //ImageReader.OnImageAvailableListener readerListener = new ImageReader.OnImageAvailableListener() {
-        // @Override
-        //   public void onImageAvailable(ImageReader reader) {
+
 
         try {
-            //image = reader.acquireLatestImage();
-            //    buffer.clear();
-            //   buffer = image.getPlanes()[0].getBuffer();
-            //   bytes = new byte[buffer.capacity()];
-            //   buffer.get(bytes);
+
             save(bytes, file);
             Toast.makeText(MainActivity.this, "Saved:" + file, Toast.LENGTH_SHORT).show();
+
+         //   procIm= new com.example.app_v03.TesseractWork();
+          //  procIm.processImage(file);
+          //  editText2.append( procIm.processImage(file) );
 
         } catch (FileNotFoundException e) {
             e.printStackTrace();
@@ -319,17 +344,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    // };
-
-
-    //  }
-
 
     protected void createCameraPreview() {
         try {
             SurfaceTexture texture = textureView.getSurfaceTexture();
             assert texture != null;
             texture.setDefaultBufferSize(imageDimension.getWidth(), imageDimension.getHeight());
+       //     texture.setDefaultBufferSize(200, 200);
             Surface surface = new Surface(texture);
             captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
             captureRequestBuilder.addTarget(surface);

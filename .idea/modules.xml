@@ -3,7 +3,8 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
-      <module fileurl="file://$PROJECT_DIR$/app_v03.iml" filepath="$PROJECT_DIR$/app_v03.iml" />
+      <module fileurl="file://$PROJECT_DIR$/myProj.iml" filepath="$PROJECT_DIR$/myProj.iml" />
+      <module fileurl="file://F:\projects\myProj\libraries\tess-two\tess-two.iml" filepath="F:\projects\myProj\libraries\tess-two\tess-two.iml" />
     </modules>
   </component>
 </project>
