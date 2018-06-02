@@ -21,11 +21,11 @@ public class TesseractWork {
     public TessBaseAPI api;
     public String result = "0000";
     private static final String lang = "eng";
-    private static final String DATA_PATH = Environment.getExternalStorageDirectory().toString() + "/TesseractSample/";
+  //  private static final String DATA_PATH = Environment.getExternalStorageDirectory().toString() + "/TesseractSample/";
  //   private static final String TESSDATA = "tessdata";
 
 
-    public void startOCR(byte[] bytes) {
+    public void startOCR(byte[] bytes, String datapath) {
         try {
 
             BitmapFactory.Options options = new BitmapFactory.Options();
@@ -41,14 +41,14 @@ public class TesseractWork {
 
        //     File newfile = savebitmap(bitmap, outputFileUri.toString());
 
-            result = extractText(bitmap);
+            result = extractText(bitmap, datapath);
 
         } catch (Exception e) {
             Log.e(TAG, e.getMessage());
         }
     }
 
-    public String extractText(Bitmap bmp) {
+    public String extractText(Bitmap bmp,String datapath) {
         try {
             api = new TessBaseAPI();
         } catch (Exception e) {
@@ -59,26 +59,27 @@ public class TesseractWork {
         }
 
 
-       api.init(DATA_PATH, lang);
+       api.init(datapath, lang);
 
       //EXTRA SETTINGS
 //       // For example if we only want to detect numbers
-      //  api.setVariable(TessBaseAPI.VAR_CHAR_WHITELIST, "1234567890");
+     //   api.setVariable(TessBaseAPI.VAR_CHAR_WHITELIST, "1234567890.,");
 //
 //        //blackList Example
-//        tessBaseApi.setVariable(TessBaseAPI.VAR_CHAR_BLACKLIST, "!@#$%^&*()_+=-qwertyuiop[]}{POIU" +
-//                "YTRWQasdASDfghFGHjklJKLl;L:'\"\\|~`xcvXCVbnmBNM,./<>?");
+    //  api.setVariable(TessBaseAPI.VAR_CHAR_BLACKLIST, "!@#$%^&*()_+=-qwertyuiop[]}{POIU" +
+     //         "YTRWQasdASDfghFGHjklJKLl;L:'\"\\|~`xcvXCVbnmBNM/<>?");
 
-        Log.d(TAG, "Training file loaded");
+        Log.i(TAG, "Training file loaded");
 
         api.setImage(bmp);
         String extractedText = "empty result";
         try {
             extractedText = api.getUTF8Text();
-            Log.e(TAG, "Trying to extract text.");
+            Log.i(TAG, "Trying to extract text.");
         } catch (Exception e) {
-            Log.e(TAG, "Error in recognizing text.");
+            Log.i(TAG, "Error in recognizing text.");
         }
+
         api.end();
         return extractedText;
     }

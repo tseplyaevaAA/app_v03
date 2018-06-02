@@ -2,11 +2,13 @@ package com.example.app_v03;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.ImageFormat;
 import android.graphics.SurfaceTexture;
+
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
@@ -44,6 +46,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
@@ -53,6 +56,8 @@ import java.util.List;
 import java.util.Random;
 
 import com.googlecode.tesseract.android.TessBaseAPI;
+
+
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "AndroidCameraApi";
@@ -89,9 +94,11 @@ public class MainActivity extends AppCompatActivity {
     Image image;
     ImageReader reader;
     CaptureRequest.Builder captureBuilder;
-    Double tess_num;
-    Double converted_num;
-    String result1="111";
+  //  Double tess_num;
+  //  Double converted_num;
+    String result1="";
+    private static final String DATA_PATH = Environment.getExternalStorageDirectory().toString() + "/AppwithRec/";
+    private static final String TESSDATA = "tessdata";
 
 
 
@@ -114,8 +121,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-
-
         savepicture.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -129,6 +134,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
             //open your camera here
+            surface.setDefaultBufferSize(600,400);
             openCamera();
         }
 
@@ -194,12 +200,12 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public Uri getImageUri(Context inContext, Bitmap inImage) {
+ /*   public Uri getImageUri(Context inContext, Bitmap inImage) {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         inImage.compress(Bitmap.CompressFormat.JPEG, 100, bytes);
         String path = MediaStore.Images.Media.insertImage(inContext.getContentResolver(), inImage, "Title", null);
         return Uri.parse(path);
-    }
+    }*/
 
     protected void takePicture() {
 
@@ -244,16 +250,19 @@ public class MainActivity extends AppCompatActivity {
                     //     try {
                     image = reader.acquireLatestImage();
 
-                    buffer.allocate(0);
+
 
                     buffer = image.getPlanes()[0].getBuffer();
                     bytes = new byte[buffer.capacity()];
+
+                    buffer.clear();
                     buffer.get(bytes);
 
-                    tesswork.startOCR(bytes);
+                    prepareTesseract();
+                    tesswork.startOCR(bytes, DATA_PATH);
                     result1 = tesswork.result;
                     Toast.makeText(MainActivity.this, result1, Toast.LENGTH_SHORT).show();
-
+                    updateText(result1);
                 //  editText2.append(result1);
                 }
 
@@ -292,7 +301,72 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void updateText(final String result1) {
+        Handler h = new Handler(this.getMainLooper());
+        Runnable r = new Runnable() {
+            @Override
+            public void run() {
+                editText2.setText(result1);
+            }
+        };
+        h.post(r);
+    }
 
+    private void prepareDirectory(String path) {
+
+        File dir = new File(path);
+        if (!dir.exists()) {
+            if (!dir.mkdirs()) {
+                Log.e(TAG, "ERROR: Creation of directory " + path + " failed, check does Android Manifest have permission to write to external storage.");
+            }
+        } else {
+            Log.i(TAG, "Created directory " + path);
+        }
+    }
+
+
+    private void prepareTesseract() {
+        try {
+            prepareDirectory(DATA_PATH + TESSDATA);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        copyTessDataFiles(TESSDATA);
+    }
+
+    private void copyTessDataFiles(String path) {
+        try {
+            String fileList[] = getAssets().list(path);
+
+            for (String fileName : fileList) {
+
+                // open file within the assets folder
+                // if it is not already there copy it to the sdcard
+                String pathToDataFile = DATA_PATH + path + "/" + fileName;
+                if (!(new File(pathToDataFile)).exists()) {
+
+                    InputStream in = getAssets().open(path + "/" + fileName);
+
+                    OutputStream out = new FileOutputStream(pathToDataFile);
+
+                    // Transfer bytes from in to out
+                    byte[] buf = new byte[1024];
+                    int len;
+
+                    while ((len = in.read(buf)) > 0) {
+                        out.write(buf, 0, len);
+                    }
+                    in.close();
+                    out.close();
+
+                    Log.d(TAG, "Copied " + fileName + "to tessdata");
+                }
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "Unable to copy files to tessdata " + e.toString());
+        }
+    }
 
 
     public void save(byte[] bytes, File _file) throws IOException {
@@ -349,9 +423,12 @@ public class MainActivity extends AppCompatActivity {
         try {
             SurfaceTexture texture = textureView.getSurfaceTexture();
             assert texture != null;
-            texture.setDefaultBufferSize(imageDimension.getWidth(), imageDimension.getHeight());
-       //     texture.setDefaultBufferSize(200, 200);
+
+           texture.setDefaultBufferSize(imageDimension.getWidth(), imageDimension.getHeight());
+        //   texture.setDefaultBufferSize(200, 200);
             Surface surface = new Surface(texture);
+
+
             captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
             captureRequestBuilder.addTarget(surface);
             cameraDevice.createCaptureSession(Arrays.asList(surface), new CameraCaptureSession.StateCallback() {
@@ -363,6 +440,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                     // When the session is ready, we start displaying the preview.
                     cameraCaptureSessions = cameraCaptureSession;
+
                     updatePreview();
                 }
 
@@ -382,17 +460,24 @@ public class MainActivity extends AppCompatActivity {
         Log.e(TAG, "is camera open");
         try {
             cameraId = manager.getCameraIdList()[0];
+
             CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
             StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
             //   assert map != null;
-            imageDimension = map.getOutputSizes(SurfaceTexture.class)[0];
+
+            imageDimension = map.getOutputSizes(ImageFormat.JPEG)[6];
             // Add permission for camera and let user grant the permission
+        //    int rotation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
+         //   captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, rotation);
+
+
             if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQUEST_CAMERA_PERMISSION);
                 return;
             }
 
-            manager.openCamera(cameraId, stateCallback, null);
+
+           manager.openCamera(cameraId, stateCallback, null);
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
